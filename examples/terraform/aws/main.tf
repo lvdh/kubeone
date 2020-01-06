@@ -45,6 +45,7 @@ data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = ["099720109477"] # Canonical
 
+  # TODO: Pin AMI version
   filter {
     name   = "name"
     values = ["ubuntu/images/hvm-ssd/ubuntu-bionic-18.04-amd64-server-*"]
@@ -56,6 +57,7 @@ data "aws_ami" "ubuntu" {
   }
 }
 
+# TODO: Prevent using default VPCs
 data "aws_vpc" "selected" {
   id = var.vpc_id == "default" ? aws_default_vpc.default.id : var.vpc_id
 }
@@ -67,8 +69,10 @@ data "aws_internet_gateway" "default" {
   }
 }
 
+# TODO: Prevent using default VPCs
 resource "aws_default_vpc" "default" {}
 
+# TODO: Ensure subnet CIDRs predictable
 resource "random_integer" "cidr_block" {
   min = 0
   max = local.subnet_total - 1
@@ -76,12 +80,14 @@ resource "random_integer" "cidr_block" {
 
 ############################### NETWORKING SETUP ###############################
 
+# TODO: Ensure subnets are private
 resource "aws_subnet" "public" {
   count                   = 3
   availability_zone       = data.aws_availability_zones.available.names[count.index]
   map_public_ip_on_launch = true
   vpc_id                  = data.aws_vpc.selected.id
 
+  # TODO: Ensure subnet CIDRs are predictable
   cidr_block = cidrsubnet(
     data.aws_vpc.selected.cidr_block,
     local.subnet_newbits,
@@ -112,6 +118,7 @@ resource "aws_security_group_rule" "ingress_self_allow_all" {
   type              = "ingress"
   security_group_id = aws_security_group.common.id
 
+  # TODO: Narrow down Security Group ingress protocol and ports (where applicable)
   description = "allow all incomming traffic from members of this group"
   from_port   = 0
   to_port     = 0
@@ -123,6 +130,7 @@ resource "aws_security_group_rule" "egress_allow_all" {
   type              = "egress"
   security_group_id = aws_security_group.common.id
 
+  # TODO: Narrow down Security Group egress protocol, ports and destination (where applicable)
   description = "allow all outgoing traffic"
   from_port   = 0
   to_port     = 0
@@ -147,6 +155,7 @@ resource "aws_security_group" "elb" {
   description = "kube-api firewall"
   vpc_id      = data.aws_vpc.selected.id
 
+  # TODO: Narrow down Security Group egress protocol, ports and destination (where applicable)
   egress {
     description = "allow all outgoing traffic"
     from_port   = 0
@@ -155,6 +164,7 @@ resource "aws_security_group" "elb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # TODO: Narrow down Security Group ingress protocol, ports and source (where applicable)
   ingress {
     description = "allow anyone to connect to tcp/6443"
     from_port   = 6443
@@ -173,6 +183,7 @@ resource "aws_security_group" "ssh" {
   description = "ssh access"
   vpc_id      = data.aws_vpc.selected.id
 
+  # TODO: Narrow down Security Group ingress source (if applicable)
   ingress {
     description = "allow incomming SSH"
     from_port   = var.ssh_port
@@ -188,6 +199,7 @@ resource "aws_security_group" "ssh" {
 
 ################################## KUBE-API LB #################################
 
+# TODO: Decrease idle_timeout (recommended, not required)
 resource "aws_elb" "control_plane" {
   name            = "${var.cluster_name}-api-lb"
   internal        = var.internal_api_lb
@@ -252,6 +264,7 @@ resource "aws_iam_role_policy" "policy" {
 
   policy = jsonencode({
     Version = "2012-10-17",
+    # TODO: Narrow down and specify Actions and Resources, prevent wildcards where possible
     Statement = [
       {
         Effect   = "Allow",
@@ -280,6 +293,7 @@ resource "aws_instance" "control_plane" {
   subnet_id              = local.subnets[data.aws_availability_zones.available.names[count.index]]
   ebs_optimized          = true
 
+  # TODO: Enable volume encryption
   root_block_device {
     volume_type = "gp2"
     volume_size = var.control_plane_volume_size
@@ -293,6 +307,7 @@ resource "aws_instance" "control_plane" {
 
 #################################### BASTION ###################################
 
+# TODO: Attach an Elastic IP (vs assigning a random one through associate_public_ip_address)
 resource "aws_instance" "bastion" {
   instance_type               = "t3.nano"
   ami                         = local.ami
@@ -302,6 +317,7 @@ resource "aws_instance" "bastion" {
   subnet_id                   = local.subnets[local.zoneA]
   associate_public_ip_address = true
 
+  # TODO: Enable volume encryption
   root_block_device {
     volume_type = "gp2"
     volume_size = 100
